@@ -143,11 +143,12 @@ func showMenu() string {
         fmt.Println("2. Close")
         fmt.Print("Enter your choice (1 or 2): ")
         choice := readLine()
-        if choice == "1" {
+        switch choice {
+		case "1":
             return "Restart"
-        } else if choice == "2" {
+        case "2":
             return "Close"
-        } else {
+        default:
             fmt.Println("\033[31mInvalid choice. Please enter 1 or 2.\033[0m")
         }
     }
