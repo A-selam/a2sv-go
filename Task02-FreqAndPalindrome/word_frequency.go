@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
 )
@@ -31,8 +30,8 @@ func wordFrequencyCount(str string) map[string]int {
 	return count
 }
 
-func main() {
-	text := "Go Go GO! Is Go fun? Yes, go is fun."
-	result := wordFrequencyCount(text)
-	fmt.Println(result)
-}
+// func main() {
+// 	text := "Go Go GO! Is Go fun? Yes, go is fun."
+// 	result := wordFrequencyCount(text)
+// 	fmt.Println(result)
+// }
