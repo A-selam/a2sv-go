@@ -10,7 +10,11 @@ import (
 )
 
 func GetTasks(c *gin.Context){
-	tasks := data.GetAllTasks()
+	tasks, err := data.GetAllTasks()
+	if err != nil{
+		errorHandler(c, err)
+		return 
+	}
 	c.IndentedJSON(http.StatusOK, tasks)
 }
 
@@ -35,7 +39,7 @@ func UpdateATask(c *gin.Context){
 		return 
 	}
 
-	_, err := data.UpdateTask(id, updatedTask)
+	updatedTask, err := data.UpdateTask(id, updatedTask)
 	if err != nil {
 		errorHandler(c, err)
 		return 
