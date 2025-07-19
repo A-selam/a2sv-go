@@ -9,80 +9,92 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetTasks(c *gin.Context){
-	tasks, err := data.GetAllTasks()
-	if err != nil{
-		errorHandler(c, err)
-		return 
-	}
-	c.IndentedJSON(http.StatusOK, tasks)
-}
+func GetTasks(c *gin.Context) {
+	role := c.GetString("role")
+	username := c.GetString("username")
 
-func GetATask(c *gin.Context){
-	id := c.Param("id")
-	task, err := data.GetTask(id)
-	
-	if err != nil{
+	tasks, err := data.GetAllTasks(username, role)
+	if err != nil {
 		errorHandler(c, err)
 		return
 	}
-	
+
+	c.IndentedJSON(http.StatusOK, tasks)
+}
+
+func GetATask(c *gin.Context) {
+	taskID := c.Param("id")
+	username := c.GetString("username")
+	role := c.GetString("role") 
+
+	task, err := data.GetTask(taskID, username, role)
+	if err != nil {
+		errorHandler(c, err)
+		return
+	}
+
 	c.IndentedJSON(http.StatusOK, task)
 }
 
-func UpdateATask(c *gin.Context){
+func UpdateATask(c *gin.Context) {
 	id := c.Param("id")
+	username := c.GetString("username")
+	role := c.GetString("role")
 
 	var updatedTask models.Task
-	if err := c.ShouldBindJSON(&updatedTask) ; err != nil{
+	if err := c.ShouldBindJSON(&updatedTask); err != nil {
 		errorHandler(c, &customError.BadRequestError{Reason: "Invalid JSON"})
-		return 
+		return
 	}
 
-	updatedTask, err := data.UpdateTask(id, updatedTask)
+	task, err := data.UpdateTask(id, username, role, updatedTask)
 	if err != nil {
 		errorHandler(c, err)
-		return 
+		return
 	}
 
-	c.IndentedJSON(http.StatusOK, updatedTask)
+	c.IndentedJSON(http.StatusOK, task)
 }
 
-func DeleteATask(c *gin.Context){
-	id := c.Param("id")
+func PostTask(c *gin.Context) {
+	username := c.GetString("username")
 
-	err := data.DeleteTask(id)
-	if err != nil{
+	var newTask models.Task
+	if err := c.ShouldBindJSON(&newTask); err != nil {
+		errorHandler(c, &customError.BadRequestError{Reason: "Invalid JSON"})
+		return
+	}
+
+	task, err := data.AddATask(username, newTask)
+	if err != nil {
 		errorHandler(c, err)
-		return 
-	} 
+		return
+	}
+
+	c.IndentedJSON(http.StatusCreated, task)
+}
+
+func DeleteATask(c *gin.Context) {
+	id := c.Param("id")
+	username := c.GetString("username")
+	role := c.GetString("role")
+
+	err := data.DeleteTask(id, username, role)
+	if err != nil {
+		errorHandler(c, err)
+		return
+	}
 
 	c.Status(http.StatusNoContent)
 }
 
-func PostTask(c *gin.Context){
-	var newTask models.Task
-	if err := c.ShouldBindJSON(&newTask); err != nil{
-		errorHandler(c, &customError.BadRequestError{Reason: "Invalid JSON"})
-		return
+func errorHandler(c *gin.Context, err error) {
+	switch err.(type) {
+	case *customError.NotFoundError:
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case *customError.BadRequestError:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	default:
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Unexpected error"})
 	}
-	
-	task, err := data.AddATask(newTask)
-	if err != nil {
-		errorHandler(c, err)
-		return
-	}
-	
-	c.IndentedJSON(http.StatusCreated, task)
-}
-
-func errorHandler(c *gin.Context, err error){
-	switch err.(type){
-		case *customError.NotFoundError:
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error":err.Error()})
-		case *customError.BadRequestError:
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		default:
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Unexpected error"})
-		}
 }

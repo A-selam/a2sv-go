@@ -15,5 +15,9 @@ func InitRouter() *gin.Engine{
 	router.DELETE("/tasks/:id", task_controllers.DeleteATask)
 	router.POST("/tasks", task_controllers.PostTask)
 
+	// user routes
+	router.POST("/register", task_controllers.RegisterUser)
+	router.POST("/login", task_controllers.LoginUser)
+
 	return router 
 }

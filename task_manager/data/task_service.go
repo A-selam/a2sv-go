@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -15,8 +14,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-var collection *mongo.Collection
+var taskCollection *mongo.Collection
+var userCollection *mongo.Collection
 var Client *mongo.Client
+var JwtSecret = "jwtSecret"
 
 func InitMongo() error{
 	err := godotenv.Load()
@@ -42,9 +43,10 @@ func InitMongo() error{
 		return err
 	}
 
-	collection = Client.Database(dbName).Collection("tasks")
+	taskCollection = Client.Database(dbName).Collection("tasks")
+	userCollection = Client.Database(dbName).Collection(("users"))
 
-	count, err := collection.CountDocuments(context.TODO(), bson.D{{}})
+	count, err := taskCollection.CountDocuments(context.TODO(), bson.D{{}})
 	if err != nil {
 		return err
 	}
@@ -56,9 +58,10 @@ func InitMongo() error{
 			Description: "Practice structs and interfaces", 
 			DueDate: "2025-08-01", 
 			Status: models.Pending,
+			CreatedBy: "Admin",
 		}
 		
-		_, err = collection.InsertOne(context.TODO(), seed)
+		_, err = taskCollection.InsertOne(context.TODO(), seed)
 		if err != nil{
 			log.Fatal(err)
 			return err
@@ -74,59 +77,66 @@ func CloseMongo(){
 	}
 }
 
-func GetAllTasks() ([]*models.Task, error) {
+func GetAllTasks(username string, role string) ([]*models.Task, error) {
 	var allTasks []*models.Task
 
-	cursor, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch tasks: %w", err)
+	var filter interface{} 
+	if role == string(models.Admin){
+		filter = bson.D{{}}
+	} else {
+		filter = bson.D{{Key:"created_by",Value: username}}
 	}
 
-	defer func() {
-		if err := cursor.Close(context.TODO()); err != nil {
-			log.Printf("Error closing cursor: %v", err)
-		}
-	}()
+	cursor, err := taskCollection.Find(context.TODO(),filter)
+	if err != nil {
+		return nil, err
+	}
+
+	defer cursor.Close(context.TODO())
 
 	for cursor.Next(context.TODO()) {
 		var task models.Task
 		if err := cursor.Decode(&task); err != nil {
 			log.Printf("Error decoding task: %v", err)
-			continue // Skip problematic documents but continue processing others
+			continue 
 		}
 		allTasks = append(allTasks, &task)
 	}
 
 	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("cursor error: %w", err)
+		return nil, err
 	}
 
 	return allTasks, nil
 }
 
-func GetTask(id string) (models.Task, error){
-	taskID, err := strconv.Atoi(id)
-	if err != nil{
-		return models.Task{}, &customError.BadRequestError{Reason:"Invalid format of ID!"}
+func GetTask(taskId, username, role string) (models.Task, error) {
+	taskID, err := strconv.Atoi(taskId)
+	if err != nil {
+		return models.Task{}, &customError.BadRequestError{Reason: "Invalid format of ID!"}
 	}
 
-	taskFilter := bson.D{{Key: "id", Value: taskID}}
-	var task models.Task
+	var taskFilter bson.D
+	if role == string(models.Admin) {
+		taskFilter = bson.D{{Key: "id", Value: taskID}} 
+	} else {
+		taskFilter = bson.D{{Key: "id", Value: taskID}, {Key: "created_by", Value: username}}
+	}
 
-	err = collection.FindOne(context.TODO(), taskFilter).Decode(&task)
-	if err != nil{
-		if err == mongo.ErrNoDocuments{
+	var task models.Task
+	err = taskCollection.FindOne(context.TODO(), taskFilter).Decode(&task)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
 			return models.Task{}, &customError.NotFoundError{ID: taskID}
 		}
-		fmt.Println("Failed to fetch single task")
-		log.Fatal(err)
 		return models.Task{}, err
 	}
+
 	return task, nil
 }
 
-func UpdateTask(id string, updatedTask models.Task) (models.Task, error) {
-	taskID, err := strconv.Atoi(id)
+func UpdateTask(taskId, username, role string, updatedTask models.Task) (models.Task, error) {
+	taskID, err := strconv.Atoi(taskId)
 	if err != nil {
 		return models.Task{}, &customError.BadRequestError{Reason: "Invalid format of ID!"}
 	}
@@ -139,11 +149,16 @@ func UpdateTask(id string, updatedTask models.Task) (models.Task, error) {
 		return models.Task{}, &customError.BadRequestError{Reason: "Status must be either 'Pending' or 'Completed'"}
 	}
 
-	taskFilter := bson.D{{Key: "id", Value: taskID}}
+	var taskFilter bson.D
+	if role == string(models.Admin){
+		taskFilter = bson.D{{Key: "id", Value: taskID}}
+	} else {
+		taskFilter = bson.D{{Key: "id", Value: taskID}, {Key: "created_by", Value: username}}
+	}
 
 	// check if task exists
 	var oldTask models.Task
-	err = collection.FindOne(context.TODO(), taskFilter).Decode(&oldTask)
+	err = taskCollection.FindOne(context.TODO(), taskFilter).Decode(&oldTask)
 	if err != nil{
 		if err == mongo.ErrNoDocuments{
 			return models.Task{}, &customError.NotFoundError{ID: taskID}
@@ -152,35 +167,22 @@ func UpdateTask(id string, updatedTask models.Task) (models.Task, error) {
 	}
 
 	updatedTask.ID = oldTask.ID
-	_, err = collection.ReplaceOne(context.TODO(), taskFilter, updatedTask)
+	updatedTask.CreatedBy = oldTask.CreatedBy
+
+	_, err = taskCollection.ReplaceOne(context.TODO(), taskFilter, updatedTask)
 	if err != nil{
 		return models.Task{}, err
+	}
+
+	err = taskCollection.FindOne(context.TODO(), taskFilter).Decode(&updatedTask)
+	if err != nil {
+	    return models.Task{}, err
 	}
 
 	return updatedTask, nil
 }
 
-func DeleteTask(id string) (error){
-	taskID, err := strconv.Atoi(id)
-	if err != nil {
-		return &customError.BadRequestError{Reason: "Invalid format of ID!"} 
-	}
-	
-	taskFilter := bson.D{{Key:"id", Value: taskID}}
-	
-	deleteResult, err := collection.DeleteOne(context.TODO(), taskFilter)
-	if err != nil {
-		return err
-	}
-
-	if deleteResult.DeletedCount == 0{
-		return &customError.NotFoundError{ID: taskID}
-	}
-
-	return nil
-}
-
-func AddATask(task models.Task) (models.Task, error) {
+func AddATask(username string, task models.Task) (models.Task, error) {
 	if task.Title == "" || task.Description == "" || task.DueDate == "" {
 		return models.Task{}, &customError.BadRequestError{Reason: "Fields cannot be empty!"}
 	}
@@ -192,7 +194,7 @@ func AddATask(task models.Task) (models.Task, error) {
 	// Find the highest current ID
 	opts := options.FindOne().SetSort(bson.D{{Key: "id", Value: -1}})
 	var lastTask models.Task
-	err := collection.FindOne(context.TODO(), bson.M{}, opts).Decode(&lastTask)
+	err := taskCollection.FindOne(context.TODO(), bson.M{}, opts).Decode(&lastTask)
 	if err != nil && err != mongo.ErrNoDocuments {
 		return models.Task{}, err
 	}
@@ -204,10 +206,37 @@ func AddATask(task models.Task) (models.Task, error) {
 		task.ID = lastTask.ID + 1
 	}
 
-	_, err = collection.InsertOne(context.TODO(), task)
+	task.CreatedBy = username
+
+	_, err = taskCollection.InsertOne(context.TODO(), task)
 	if err != nil {
 		return models.Task{}, err
 	}
 
 	return task, nil
+}
+
+func DeleteTask(id, username, role string) (error){
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		return &customError.BadRequestError{Reason: "Invalid format of ID!"} 
+	}
+	
+	var taskFilter bson.D
+	if role == string(models.Admin){
+		taskFilter = bson.D{{Key:"id", Value: taskID}}
+	} else {
+		taskFilter = bson.D{{Key:"id", Value: taskID}, {Key:"created_by", Value: username}}
+	}
+	
+	deleteResult, err := taskCollection.DeleteOne(context.TODO(), taskFilter)
+	if err != nil {
+		return err
+	}
+
+	if deleteResult.DeletedCount == 0{
+		return &customError.NotFoundError{ID: taskID}
+	}
+
+	return nil
 }
