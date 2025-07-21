@@ -12,12 +12,13 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var taskCollection *mongo.Collection
 var userCollection *mongo.Collection
 var Client *mongo.Client
-var JwtSecret = "jwtSecret"
+var JwtSecret = []byte("jwtSecret")
 
 func InitMongo() error{
 	err := godotenv.Load()
@@ -49,6 +50,29 @@ func InitMongo() error{
 	count, err := taskCollection.CountDocuments(context.TODO(), bson.D{{}})
 	if err != nil {
 		return err
+	}
+
+	adminCount, err := userCollection.CountDocuments(context.TODO(), bson.D{{Key: "role", Value: "Admin"}})
+	if err != nil{
+		return err
+	}
+
+	hashedSeedPassword, err := bcrypt.GenerateFromPassword([]byte("12345678"), bcrypt.DefaultCost)
+	if err != nil{
+		return err
+	}
+	if adminCount == 0{
+		userSeed := models.User{
+			ID: 1,
+			Username: "Mr. Admin",
+			Password: string(hashedSeedPassword),
+			Role: models.Admin,
+		}
+
+		_, err = userCollection.InsertOne(context.TODO(), userSeed)
+		if err != nil{
+			return err
+		}
 	}
 
 	if count == 0{
@@ -84,7 +108,7 @@ func GetAllTasks(username string, role string) ([]*models.Task, error) {
 	if role == string(models.Admin){
 		filter = bson.D{{}}
 	} else {
-		filter = bson.D{{Key:"created_by",Value: username}}
+		filter = bson.D{{Key:"createdby",Value: username}}
 	}
 
 	cursor, err := taskCollection.Find(context.TODO(),filter)
@@ -106,7 +130,7 @@ func GetAllTasks(username string, role string) ([]*models.Task, error) {
 	if err := cursor.Err(); err != nil {
 		return nil, err
 	}
-
+	println(allTasks)
 	return allTasks, nil
 }
 
@@ -120,7 +144,7 @@ func GetTask(taskId, username, role string) (models.Task, error) {
 	if role == string(models.Admin) {
 		taskFilter = bson.D{{Key: "id", Value: taskID}} 
 	} else {
-		taskFilter = bson.D{{Key: "id", Value: taskID}, {Key: "created_by", Value: username}}
+		taskFilter = bson.D{{Key: "id", Value: taskID}, {Key: "createdby", Value: username}}
 	}
 
 	var task models.Task
@@ -153,7 +177,7 @@ func UpdateTask(taskId, username, role string, updatedTask models.Task) (models.
 	if role == string(models.Admin){
 		taskFilter = bson.D{{Key: "id", Value: taskID}}
 	} else {
-		taskFilter = bson.D{{Key: "id", Value: taskID}, {Key: "created_by", Value: username}}
+		taskFilter = bson.D{{Key: "id", Value: taskID}, {Key: "createdby", Value: username}}
 	}
 
 	// check if task exists
@@ -226,7 +250,7 @@ func DeleteTask(id, username, role string) (error){
 	if role == string(models.Admin){
 		taskFilter = bson.D{{Key:"id", Value: taskID}}
 	} else {
-		taskFilter = bson.D{{Key:"id", Value: taskID}, {Key:"created_by", Value: username}}
+		taskFilter = bson.D{{Key:"id", Value: taskID}, {Key:"createdby", Value: username}}
 	}
 	
 	deleteResult, err := taskCollection.DeleteOne(context.TODO(), taskFilter)
