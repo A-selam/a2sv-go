@@ -2,15 +2,18 @@ package task_controllers
 
 import (
 	"net/http"
-	"task_manager/data"
-	"task_manager/models"
+	domain "task_manager/Domain"
 
 	"github.com/gin-gonic/gin"
 )
 
+type UserController struct {
+	UserUsecase domain.UserUsecase
+}
+
 // POST /register
-func RegisterUser(c *gin.Context) {
-	var user models.User
+func (uc *UserController) RegisterUser(c *gin.Context) {
+	var user domain.User
 
 	// Bind incoming JSON to user struct
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -19,7 +22,7 @@ func RegisterUser(c *gin.Context) {
 	}
 
 	// Call the service layer to register the user
-	if err := data.RegisterUser(user); err != nil {
+	if err := uc.UserUsecase.Register(c, user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -28,8 +31,8 @@ func RegisterUser(c *gin.Context) {
 }
 
 // POST /login
-func LoginUser(c *gin.Context) {
-	var user models.Login
+func (uc *UserController) LoginUser(c *gin.Context) {
+	var user domain.Login
 
 	// Bind incoming JSON to user struct
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -38,7 +41,7 @@ func LoginUser(c *gin.Context) {
 	}
 
 	// Call the service layer to login and get token
-	token, err := data.LoginUser(user)
+	token, err := uc.UserUsecase.Login(c, user)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
