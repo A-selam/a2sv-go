@@ -4,9 +4,12 @@ import (
 	"context"
 	"log"
 	"os"
-	"time"
-
+	task_controllers "task_manager/Delivery/controllers"
 	"task_manager/Delivery/router"
+	infrastructure "task_manager/Infrastructure"
+	repositories "task_manager/Repositories"
+	usecases "task_manager/Usecases"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -15,49 +18,71 @@ import (
 )
 
 func main() {
-	// Load .env file
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Println("Warning: .env file not found or failed to load", err)
-	}
+    // Load .env file
+    err := godotenv.Load("../.env") 
+    if err != nil {
+        log.Println("Warning: .env file not found or failed to load", err)
+    }
 
-	mongoURI := os.Getenv("MONGODB_URI")
-	if mongoURI == "" {
-		log.Fatal("MONGODB_URI is not set")
-	}
+    // Retrieve environment variables
+    mongoURI := os.Getenv("MONGODB_URI")
+    if mongoURI == "" {
+        log.Fatal("MONGODB_URI is not set")
+    }
 
-	dbName := os.Getenv("DB_NAME")
-	if dbName == "" {
-		log.Fatal("DB_NAME is not set")
-	}
+    dbName := os.Getenv("DB_NAME")
+    if dbName == "" {
+        log.Fatal("DB_NAME is not set")
+    }
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET is not set")
-	}
+    jwtSecret := os.Getenv("JWT_SECRET")
+    if jwtSecret == "" {
+        log.Fatal("JWT_SECRET is not set")
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+    // Initialize MongoDB client
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
 
-	clientOptions := options.Client().ApplyURI(mongoURI)
+    clientOptions := options.Client().
+        ApplyURI(mongoURI).
+        SetMaxPoolSize(100).
+        SetMinPoolSize(10).
+        SetMaxConnIdleTime(30 * time.Second)
 
-	// Connect to MongoDB
-	client, err := mongo.Connect(clientOptions)
-	if err != nil {
-		log.Fatal("MongoDB connection error:", err)
-	}
-	defer client.Disconnect(ctx)
+    client, err := mongo.Connect(clientOptions)
+    if err != nil {
+        log.Fatal("MongoDB connection error:", err)
+    }
+    defer client.Disconnect(context.Background()) 
 
-	db := client.Database(dbName)
+    // Verify connection
+    if err := client.Ping(ctx, nil); err != nil {
+        log.Fatal("Failed to ping MongoDB:", err)
+    }
 
-	// Setup Gin engine
-	engine := gin.Default()
+    // Initialize database
+    db := client.Database(dbName)
 
-	// Pass jwtSecret to router so it can pass to JWT service (you'll need to update your router.Setup accordingly)
-	router.Setup(30*time.Second, *db, engine, jwtSecret)
+    // Initialize services and repositories
+    timeOut := 30 * time.Second
+    jwtService := infrastructure.NewJWTService(jwtSecret)
+    passwordService := infrastructure.NewPasswordService()
 
-	if err := engine.Run("localhost:3000"); err != nil {
-		log.Fatal("Failed to start server:", err)
-	}
+    ur := repositories.NewUserRepositoryFromDB(db) 
+    uu := usecases.NewUserUsecase(ur, jwtService, passwordService, timeOut)
+    uc := task_controllers.NewUserController(uu)
+
+    tr := repositories.NewTaskRepositoryFromDB(db) 
+    tu := usecases.NewTaskUsecase(tr, timeOut)
+    tc := task_controllers.NewTaskController(tu)
+
+    // Set up Gin router
+    engine := gin.Default()
+    router.Setup(uc, tc, engine, jwtService)
+
+    // Start server
+    if err := engine.Run("localhost:3000"); err != nil {
+        log.Fatal("Failed to start server:", err)
+    }
 }
-

@@ -11,60 +11,22 @@ type TaskController struct {
 	TaskUseCase domain.TaskUsecase
 }
 
-// /////////////////////////////////////////////////////////////////////////////////////////////
-// func (tc *TaskController) Create(c *gin.Context) {
-// 	var task domain.Task
-
-// 	err := c.ShouldBind(&task)
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, domain.ErrorResponse{Message: err.Error()})
-// 		return
-// 	}
-
-// 	userID := c.GetString("x-user-id")
-// 	task.ID = primitive.NewObjectID()
-
-// 	task.UserID, err = primitive.ObjectIDFromHex(userID)
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, domain.ErrorResponse{Message: err.Error()})
-// 		return
-// 	}
-
-// 	err = tc.TaskUsecase.Create(c, &task)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, domain.ErrorResponse{Message: err.Error()})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusOK, domain.SuccessResponse{
-// 		Message: "Task created successfully",
-// 	})
-// }
-
-// func (u *TaskController) Fetch(c *gin.Context) {
-// 	userID := c.GetString("x-user-id")
-
-// 	tasks, err := u.TaskUsecase.FetchByUserID(c, userID)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, domain.ErrorResponse{Message: err.Error()})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusOK, tasks)
-// }
-
-// /////////////////////////////////////////////////////////////////////////////////////////////
+func NewTaskController(tu domain.TaskUsecase) *TaskController{
+	return &TaskController{
+		TaskUseCase: tu,
+	}
+}
 
 func (tc *TaskController) GetTasks(c *gin.Context) {
 	role := c.GetString("role")
 	username := c.GetString("username")
-
+	
 	tasks, err := tc.TaskUseCase.GetAllTasks(c, username, role)
 	if err != nil {
 		errorHandler(c, err)
 		return
 	}
-
+	
 	c.IndentedJSON(http.StatusOK, tasks)
 }
 

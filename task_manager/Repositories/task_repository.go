@@ -10,49 +10,18 @@ import (
 )
 
 type taskRepository struct {
-	database mongo.Database
+	database *mongo.Database
 	collection string
 }
 
-func NewTaskRepository(db mongo.Database, collection string) domain.TaskRepository{
+// for testing purpose
+func NewTaskRepositoryFromDB(db *mongo.Database) domain.TaskRepository {
 	return &taskRepository{
-		database: db,
-		collection: collection,
+		database:   db,
+		collection: "tasks",
 	}
 }
 
-// // /////////////////////////////////////////////////////////////////////////////////////////////////
-// func (tr *taskRepository) Create(c context.Context, task *domain.Task) error {
-// 	collection := tr.database.Collection(tr.collection)
-
-// 	_, err := collection.InsertOne(c, task)
-
-// 	return err
-// }
-
-// func (tr *taskRepository) FetchByUserID(c context.Context, userID string) ([]domain.Task, error) {
-// 	collection := tr.database.Collection(tr.collection)
-
-// 	var tasks []domain.Task
-
-// 	idHex, err := primitive.ObjectIDFromHex(userID)
-// 	if err != nil {
-// 		return tasks, err
-// 	}
-
-// 	cursor, err := collection.Find(c, bson.M{"userID": idHex})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	err = cursor.All(c, &tasks)
-// 	if tasks == nil {
-// 		return []domain.Task{}, err
-// 	}
-
-// 	return tasks, err
-// }
-// /////////////////////////////////////////////////////////////////////////////////////////////////
 func (r *taskRepository)GetAllTasks(c context.Context) ([]*domain.Task, error){
 	collection := r.database.Collection(r.collection)
 

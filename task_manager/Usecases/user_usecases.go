@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 	domain "task_manager/Domain"
 	"time"
 
@@ -83,6 +84,10 @@ func (u *userUsecase) Login(c context.Context, user domain.Login) (string, error
 	existingUser, err := u.userRepository.GetUser(ctx, user.Username)
 	if err == mongo.ErrNoDocuments || u.passwordServices.ComparePassword(existingUser.Password, user.Password) != nil{
 		return "", &domain.BadRequestError{Reason: "Incorrect username or password"}
+	}
+	if err != nil {
+		fmt.Println(err.Error())
+		return "", err
 	}
 
 	return u.jwtServices.GenerateToken(existingUser.Username, string(existingUser.Role))

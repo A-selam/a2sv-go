@@ -21,18 +21,6 @@ func NewTaskUsecase(taskRepository domain.TaskRepository, timeout time.Duration)
 	}
 }
 
-// func (tu *taskUsecase) Create(c context.Context, task *domain.Task) error {
-// 	ctx, cancel := context.WithTimeout(c, tu.contextTimeout)
-// 	defer cancel()
-// 	return tu.taskRepository.Create(ctx, task)
-// }
-
-// func (tu *taskUsecase) FetchByUserID(c context.Context, userID string) ([]domain.Task, error) {
-// 	ctx, cancel := context.WithTimeout(c, tu.contextTimeout)
-// 	defer cancel()
-// 	return tu.taskRepository.FetchByUserID(ctx, userID)
-// }
-
 func (u *taskUsecase)GetAllTasks(c context.Context, username, role string)([]*domain.Task, error){
 	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
 	defer cancel()

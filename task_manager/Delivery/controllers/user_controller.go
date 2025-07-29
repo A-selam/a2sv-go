@@ -11,6 +11,12 @@ type UserController struct {
 	UserUsecase domain.UserUsecase
 }
 
+func NewUserController(uu domain.UserUsecase) *UserController{
+	return &UserController{
+		UserUsecase: uu,
+	}
+}
+
 // POST /register
 func (uc *UserController) RegisterUser(c *gin.Context) {
 	var user domain.User
